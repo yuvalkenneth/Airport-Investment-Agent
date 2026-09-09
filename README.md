@@ -21,9 +21,10 @@ The agent exposes these tools:
 - `get_outbound_flights` and `get_inbound_flights`: observed OpenSky flights for an explicit UTC date range.
 - `calculate_route_distance` and `calculate_percentage`: deterministic calculations.
 
-All remote calls use `httpx`. Responses are handled in memory; the agent does
-not download or maintain aviation datasets. OpenSky flight history requires an
-OAuth2 client. Add both values to `.env`:
+FAA and Aviation Weather Center calls use `httpx`; OpenSky calls use its official
+Python SDK. Responses are handled in memory, so the agent does not maintain an
+aviation dataset. OpenSky flight history requires an OAuth2 client. Add both
+values to `.env`:
 
 ```text
 OPENSKY_CLIENT_ID=
@@ -43,9 +44,3 @@ uv run --env-file .env python scripts/inspect_apis.py
 
 The inspector writes JSON evidence under `samples/`. It never records OpenSky
 credentials or access tokens.
-
-Run the offline checks:
-
-```sh
-uv run python -m unittest -v
-```

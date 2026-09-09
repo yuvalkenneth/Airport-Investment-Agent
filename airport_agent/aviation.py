@@ -1,4 +1,4 @@
-"""Thin httpx clients for the public aviation APIs used by the agent."""
+"""Thin clients for the public aviation APIs used by the agent."""
 
 from __future__ import annotations
 
@@ -11,12 +11,13 @@ import xml.etree.ElementTree as ET
 from typing import Literal
 
 import httpx
+from opensky_api import OpenSkyApi
 from pydantic import BaseModel, Field, field_validator, model_validator
+from requests import RequestException
 
 AWC_URL = "https://aviationweather.gov/api/data"
 FAA_STATUS_URL = "https://nasstatus.faa.gov/api/airport-status-information"
 OPENSKY_URL = "https://opensky-network.org/api"
-OPENSKY_TOKEN_URL = "https://auth.opensky-network.org/auth/realms/opensky-network/protocol/openid-connect/token"
 LONG_HAUL_MILES = 3_000
 USER_AGENT = "AirportInvestmentAssessment/0.1"
 
@@ -69,13 +70,17 @@ def _json(response: httpx.Response, source: str):
 @lru_cache(maxsize=256)
 def airport_details(code: str) -> dict:
     code = code.upper()
-    ids = code if len(code) == 4 else ",".join((code, f"K{code}", f"P{code}"))
+    candidates = (code,) if len(code) == 4 else (f"K{code}", f"P{code}", code)
     with _client() as client:
-        rows = _json(client.get(f"{AWC_URL}/airport", params={"ids": ids, "format": "json"}), "AWC")
-    matches = [row for row in rows if code in {row.get("icaoId"), row.get("iataId"), row.get("faaId")}]
-    if not matches:
-        raise AviationDataError(f"No airport found for {code}")
-    return matches[0]
+        for candidate in candidates:
+            response = client.get(f"{AWC_URL}/airport", params={"ids": candidate, "format": "json"})
+            if response.status_code == 204:
+                continue
+            rows = _json(response, "AWC")
+            matches = [row for row in rows if code in {row.get("icaoId"), row.get("iataId"), row.get("faaId")}]
+            if matches:
+                return matches[0]
+    raise AviationDataError(f"No airport found for {code}")
 
 
 def latest_weather(code: str) -> dict:
@@ -107,15 +112,27 @@ def airport_status(code: str) -> dict:
     return {"airport": iata, "updated_at": root.findtext("Update_Time"), "active_events": events, "active_event_count": len(events), "source": FAA_STATUS_URL}
 
 
-def _auth_headers(client: httpx.Client) -> dict[str, str]:
+def _opensky_client() -> OpenSkyApi:
     client_id = os.getenv("OPENSKY_CLIENT_ID", "").strip()
     client_secret = os.getenv("OPENSKY_CLIENT_SECRET", "").strip()
-    if not client_id and not client_secret:
-        return {}
     if not client_id or not client_secret:
         raise AviationDataError("Set both OPENSKY_CLIENT_ID and OPENSKY_CLIENT_SECRET")
-    data = _json(client.post(OPENSKY_TOKEN_URL, data={"grant_type": "client_credentials", "client_id": client_id, "client_secret": client_secret}), "OpenSky OAuth")
-    return {"Authorization": f"Bearer {data['access_token']}"}
+    return OpenSkyApi(client_id=client_id, client_secret=client_secret)
+
+
+def _airport_details_many(codes: set[str]) -> dict[str, dict]:
+    """Fetch destination metadata in small batches instead of one request per flight."""
+    details = {}
+    codes = sorted(code for code in codes if code)
+    with _client() as client:
+        for offset in range(0, len(codes), 25):
+            batch = codes[offset : offset + 25]
+            try:
+                rows = _json(client.get(f"{AWC_URL}/airport", params={"ids": ",".join(batch), "format": "json"}), "AWC")
+            except AviationDataError:
+                continue
+            details.update({row["icaoId"]: row for row in rows if row.get("icaoId")})
+    return details
 
 
 def route_distance_miles(origin: dict, destination: dict) -> float:
@@ -129,29 +146,31 @@ def get_flights(query: FlightQuery, direction: Literal["departure", "arrival"]) 
     other_field = "estArrivalAirport" if direction == "departure" else "estDepartureAirport"
     endpoint = f"{OPENSKY_URL}/flights/{direction}"
     rows = []
-    with _client() as client:
-        headers = _auth_headers(client)
+    method_name = "get_departures_by_airport" if direction == "departure" else "get_arrivals_by_airport"
+    try:
+        api = _opensky_client()
+        method = getattr(api, method_name)
         day = query.start_date
         while day <= query.end_date:
             begin = int(datetime.combine(day, datetime.min.time(), tzinfo=UTC).timestamp())
-            response = client.get(endpoint, params={"airport": airport["icaoId"], "begin": begin, "end": begin + 86_400}, headers=headers)
-            rows.extend([] if response.status_code == 404 else _json(response, "OpenSky"))
+            result = method(airport["icaoId"], begin, begin + 86_400)
+            rows.extend(vars(flight) for flight in (result or []))
             day += timedelta(days=1)
+    except (RequestException, ValueError) as exc:
+        raise AviationDataError(f"OpenSky request failed: {exc}") from exc
 
     flights = []
     unknown_other_airport = 0
+    other_airports = _airport_details_many({row.get(other_field) for row in rows if row.get(other_field)})
     for row in rows:
         other_code = row.get(other_field)
         distance = None
-        if other_code:
-            try:
-                distance = route_distance_miles(airport, airport_details(other_code))
-            except AviationDataError:
-                pass
+        if other_code in other_airports:
+            distance = route_distance_miles(airport, other_airports[other_code])
         if distance is None:
             unknown_other_airport += 1
         haul = "long_haul" if distance is not None and distance > LONG_HAUL_MILES else "not_long_haul" if distance is not None else "unknown"
         if query.haul != "all" and haul != query.haul:
             continue
         flights.append({"icao24": row.get("icao24"), "callsign": (row.get("callsign") or "").strip() or None, "first_seen": row.get("firstSeen"), "last_seen": row.get("lastSeen"), "other_airport": other_code, "distance_miles": distance, "haul": haul})
-    return {"airport": airport["icaoId"], "direction": direction, "period": {"start_date": str(query.start_date), "end_date": str(query.end_date)}, "haul_filter": query.haul, "long_haul_definition": f"distance > {LONG_HAUL_MILES:,} statute miles", "observed_flights": len(rows), "matching_flights": len(flights), "unknown_other_airport": unknown_other_airport, "flights": flights[:query.limit], "truncated": len(flights) > query.limit, "source": endpoint, "limitations": "ADS-B observations; not schedules, passenger totals, or complete traffic coverage"}
+    return {"airport": airport["icaoId"], "direction": direction, "period": {"start_date": str(query.start_date), "end_date": str(query.end_date)}, "haul_filter": query.haul, "long_haul_definition": f"distance > {LONG_HAUL_MILES:,} statute miles", "observed_flights": len(rows), "matching_flights": len(flights), "unknown_other_airport": unknown_other_airport, "flights": flights[:query.limit], "truncated": len(flights) > query.limit, "source": {"name": "OpenSky Network", "client": "official opensky-api Python SDK", "url": endpoint}, "limitations": "ADS-B observations; not schedules, passenger totals, or complete traffic coverage"}

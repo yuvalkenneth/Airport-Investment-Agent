@@ -6,5 +6,9 @@ dependencies = [
     "httpx>=0.28.1",
     "langchain>=1.4.0",
     "langchain-openrouter>=0.2.8",
+    "opensky-api",
     "pydantic>=2.12.5",
 ]
+
+[tool.uv.sources]
+opensky-api = { git = "https://github.com/openskynetwork/opensky-api.git", subdirectory = "python" }

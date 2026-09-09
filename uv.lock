@@ -10,6 +10,7 @@ dependencies = [
     { name = "httpx" },
     { name = "langchain" },
     { name = "langchain-openrouter" },
+    { name = "opensky-api" },
     { name = "pydantic" },
 ]
 
@@ -18,6 +19,7 @@ requires-dist = [
     { name = "httpx", specifier = ">=0.28.1" },
     { name = "langchain", specifier = ">=1.4.0" },
     { name = "langchain-openrouter", specifier = ">=0.2.8" },
+    { name = "opensky-api", git = "https://github.com/openskynetwork/opensky-api.git?subdirectory=python" },
     { name = "pydantic", specifier = ">=2.12.5" },
 ]
 
@@ -464,6 +466,14 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/5e/61/6a238508a4e4310a7674c360b656a652a8e11973e451c6eca8da8bf45d8d/openrouter-0.11.46.tar.gz", hash = "sha256:5470af3e7bf25ad84cd410b43bbd4aba3052642d7a5033e5767b35c0ee5608db", size = 380405, upload-time = "2026-07-20T17:06:23.391Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/08/e3/0504f94e182c8975750bc9eb280552cf9cec9a7ffe20edeb44a825fa605d/openrouter-0.11.46-py3-none-any.whl", hash = "sha256:9acbb9922bcae46239ef4364c8ec095284773494fac40c92c61a24e1a1d239b4", size = 837323, upload-time = "2026-07-20T17:06:22.039Z" },
+]
+
+[[package]]
+name = "opensky-api"
+version = "1.4.0"
+source = { git = "https://github.com/openskynetwork/opensky-api.git?subdirectory=python#2f7def6609c5d0ec5ace05b034d8bd0d2527b86b" }
+dependencies = [
+    { name = "requests" },
 ]
 
 [[package]]
