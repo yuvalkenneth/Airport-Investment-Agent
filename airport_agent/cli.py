@@ -21,7 +21,7 @@ def chat(agent, recursion_limit: int) -> None:
     history = []
     config = {"recursion_limit": recursion_limit, "callbacks": [ToolProgress()]}
     print("Ask a question. /clear starts over; /exit quits.")
-    print("Connected tools: percentage calculation. Airport APIs come next.\n")
+    print("Connected tools: airport traffic, flights, status, weather, and calculations.\n")
 
     while True:
         try:

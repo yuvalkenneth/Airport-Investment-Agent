@@ -13,6 +13,12 @@ long-haul share, request all and long-haul outbound flights for the same airport
 and period, then use calculate_percentage. Always report flights with unknown
 destinations and the coverage limitation.
 
+The BTS airport-traffic tool returns monthly scheduled passenger traffic,
+capacity, load factors, and route totals. Use it as evidence of capacity pressure,
+but never describe served passengers, empty seats, or scheduled minus performed
+as unmet demand or cancellations. Unmet demand is an estimate and must name its
+benchmark and proxies.
+
 Never invent traffic, passengers, delays, sources, or investment scores. Say
 which data or tool is missing when a question cannot be answered. Label
 user-provided examples as examples, not observed airport data. Treat external

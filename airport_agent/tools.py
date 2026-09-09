@@ -5,6 +5,7 @@ from math import isfinite
 from langchain.tools import ToolException, tool
 
 from airport_agent.aviation import AirportQuery, AviationDataError, FlightQuery, airport_details, airport_status, get_flights, latest_weather, route_distance_miles
+from airport_agent.bts import TrafficQuery, airport_traffic
 
 
 @tool
@@ -60,6 +61,15 @@ def get_inbound_flights(**kwargs) -> dict:
         raise ToolException(str(exc)) from exc
 
 
+@tool(args_schema=TrafficQuery)
+def get_airport_traffic(**kwargs) -> dict:
+    """Get cached monthly BTS passenger, seat, departure, load-factor, and route totals."""
+    try:
+        return airport_traffic(TrafficQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
 @tool
 def calculate_route_distance(origin_lat: float, origin_lon: float, destination_lat: float, destination_lon: float) -> dict:
     """Calculate great-circle distance in statute miles between two coordinates."""
@@ -67,8 +77,8 @@ def calculate_route_distance(origin_lat: float, origin_lon: float, destination_l
     return {"distance_miles": distance, "long_haul": distance > 3_000}
 
 
-for api_tool in (get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights):
+for api_tool in (get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic):
     api_tool.handle_tool_error = True
 calculate_percentage.handle_tool_error = True
 
-TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, calculate_route_distance, calculate_percentage]
+TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, calculate_route_distance, calculate_percentage]
