@@ -154,7 +154,9 @@ def get_flights(query: FlightQuery, direction: Literal["departure", "arrival"]) 
         while day <= query.end_date:
             begin = int(datetime.combine(day, datetime.min.time(), tzinfo=UTC).timestamp())
             result = method(airport["icaoId"], begin, begin + 86_400)
-            rows.extend(vars(flight) for flight in (result or []))
+            if result is None:
+                raise AviationDataError(f"OpenSky returned no successful response for {day}; flight counts are unavailable")
+            rows.extend(vars(flight) for flight in result)
             day += timedelta(days=1)
     except (RequestException, ValueError) as exc:
         raise AviationDataError(f"OpenSky request failed: {exc}") from exc

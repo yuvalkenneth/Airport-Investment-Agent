@@ -6,6 +6,8 @@ from langchain.tools import ToolException, tool
 
 from airport_agent.aviation import AirportQuery, AviationDataError, FlightQuery, airport_details, airport_status, get_flights, latest_weather, route_distance_miles
 from airport_agent.bts import TrafficQuery, airport_traffic
+from airport_agent.kpis import ComparisonQuery, OpportunityQuery, compare_growth, compare_opportunity, compare_performance, demand_pressure
+from airport_agent.performance import PerformanceQuery, airport_performance
 
 
 @tool
@@ -63,9 +65,18 @@ def get_inbound_flights(**kwargs) -> dict:
 
 @tool(args_schema=TrafficQuery)
 def get_airport_traffic(**kwargs) -> dict:
-    """Get cached monthly BTS passenger, seat, departure, load-factor, and route totals."""
+    """Get monthly outbound BTS commercial passenger, seat, departure, and load-factor totals. Includes all service classes; no routes or cancellation counts."""
     try:
         return airport_traffic(TrafficQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
+@tool(args_schema=PerformanceQuery)
+def get_airport_performance(**kwargs) -> dict:
+    """Get historical BTS domestic arrival delay rates, cancellations, and delay causes for an airport and inclusive month range (up to 12 months). Rates use all reported operations. Average delay covers only arrivals delayed 15+ minutes. No taxi times or physical capacity measures."""
+    try:
+        return airport_performance(PerformanceQuery(**kwargs))
     except (AviationDataError, ValueError) as exc:
         raise ToolException(str(exc)) from exc
 
@@ -77,8 +88,44 @@ def calculate_route_distance(origin_lat: float, origin_lon: float, destination_l
     return {"distance_miles": distance, "long_haul": distance > 3_000}
 
 
-for api_tool in (get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic):
+@tool(args_schema=ComparisonQuery)
+def compare_airport_growth(**kwargs) -> dict:
+    """Rank US airports by outbound passenger growth versus the same months last year, then occupancy. Return growth, seats, coverage exclusions, and evidence."""
+    try:
+        return compare_growth(ComparisonQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
+@tool(args_schema=ComparisonQuery)
+def compare_airport_performance(**kwargs) -> dict:
+    """Compare US airport congestion using domestic arrival delay rate, then cancellations, for the same explicit months. More disrupted ranks first. Includes counts, reported causes and coverage; not a measure of physical capacity."""
+    try:
+        return compare_performance(ComparisonQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
+@tool(args_schema=OpportunityQuery)
+def compare_airport_opportunity(**kwargs) -> dict:
+    """Compare exactly two US airports on growth momentum, airline supply pressure, and domestic arrival disruption. Each visible dimension gets one vote; two wins produce the screen leader. This is not an investment return or physical-capacity model."""
+    try:
+        return compare_opportunity(OpportunityQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
+@tool(args_schema=PerformanceQuery)
+def get_airport_demand_pressure(**kwargs) -> dict:
+    """Assess an unmet-demand proxy: passenger growth versus seat growth against the same months last year, with occupancy and domestic arrival delays as separate evidence. Returns a deterministic pressure signal, not unserved flight counts or proven causes."""
+    try:
+        return demand_pressure(PerformanceQuery(**kwargs))
+    except (AviationDataError, ValueError) as exc:
+        raise ToolException(str(exc)) from exc
+
+
+for api_tool in (get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, get_airport_performance, compare_airport_performance, compare_airport_opportunity, get_airport_demand_pressure, compare_airport_growth):
     api_tool.handle_tool_error = True
 calculate_percentage.handle_tool_error = True
 
-TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, calculate_route_distance, calculate_percentage]
+TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, get_airport_performance, compare_airport_performance, compare_airport_opportunity, get_airport_demand_pressure, compare_airport_growth, calculate_route_distance, calculate_percentage]

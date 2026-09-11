@@ -21,7 +21,7 @@ ASSESSMENT_QUESTION_CASES = (
     {
         "question": "Which New England airports are strong terminal expansion candidates?",
         "must_clarify": ("analysis period", "ranking objective"),
-        "suggested_default": "latest complete year compared with the prior three years",
+        "suggested_default": "explicit months compared with the same months one year earlier",
     },
     {
         "question": "Compare LA and Santa Ana congestion.",
@@ -30,13 +30,13 @@ ASSESSMENT_QUESTION_CASES = (
     },
     {
         "question": "What is the percentage of long-haul flights out of Anchorage airport?",
-        "must_clarify": ("analysis period", "long-haul definition"),
-        "suggested_default": "departing flights in the latest complete calendar year; routes over 3,000 miles",
+        "must_clarify": ("analysis period",),
+        "suggested_default": "observed departures in an explicit completed UTC day; routes over 3,000 statute miles",
     },
     {
         "question": "What is the unmet flight demand at SFO and why?",
         "must_clarify": ("analysis period", "proxy for unmet demand"),
-        "suggested_default": "estimate a proxy from delay, cancellation, and capacity signals for the latest complete year",
+        "suggested_default": "passenger growth versus seat growth in explicit months against last year, with occupancy and domestic delays as supporting evidence",
     },
 )
 
@@ -93,6 +93,10 @@ class AgentChecks(unittest.TestCase):
         self.assertIn("Compare these hypothetical shares.", [m.content for m in model.seen[3]])
         self.assertEqual([m.type for m in model.seen[4]], ["system", "human"])
         self.assertEqual(output.getvalue().count("Tool: calculate_percentage"), 2)
+        self.assertIn('"part": 25', output.getvalue())
+        self.assertIn('"percentage": 25', output.getvalue())
+        self.assertEqual(output.getvalue().count("Agent > 25% and 20%."), 1)
+        self.assertNotIn("Connected tools:", output.getvalue())
         self.assertIn("Agent > 25% and 20%.", output.getvalue())
 
     def test_bad_tool_input_returns_error_and_can_recover(self):
@@ -110,10 +114,10 @@ class AgentChecks(unittest.TestCase):
     def test_step_limit_and_connection_failure_keep_previous_history(self):
         model = ScriptedModel(responses=[AIMessage(content="Remembered.")])
         agent = create_agent(model=model, tools=TOOLS, system_prompt=SYSTEM_PROMPT)
-        invoke = agent.invoke
+        stream_events = agent.stream_events
         calls = 0
 
-        def invoke_with_failure(state, config):
+        def stream_with_failure(state, config, version):
             nonlocal calls
             calls += 1
             if calls == 2:
@@ -123,11 +127,11 @@ class AgentChecks(unittest.TestCase):
                     tool_call(f"repeat-{i}", 1, 2) for i in range(5)
                 ])
                 looping_agent = create_agent(model=endless, tools=TOOLS)
-                return looping_agent.invoke(state, config={"recursion_limit": 4})
-            return invoke(state, config=config)
+                return looping_agent.stream_events(state, config={"recursion_limit": 4}, version=version)
+            return stream_events(state, config=config, version=version)
 
         output = io.StringIO()
-        with patch.object(agent, "invoke", side_effect=invoke_with_failure), patch(
+        with patch.object(agent, "stream_events", side_effect=stream_with_failure), patch(
             "builtins.input", side_effect=["Remember this.", "Offline turn.", "Loop forever.", "Follow up.", EOFError],
         ), redirect_stdout(output):
             chat(agent, AGENT_RECURSION_LIMIT)

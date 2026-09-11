@@ -5,7 +5,7 @@ from datetime import date
 from types import SimpleNamespace
 from unittest.mock import patch
 
-from airport_agent.aviation import FlightQuery, get_flights, route_distance_miles
+from airport_agent.aviation import AviationDataError, FlightQuery, get_flights, route_distance_miles
 
 
 class AviationChecks(unittest.TestCase):
@@ -33,6 +33,19 @@ class AviationChecks(unittest.TestCase):
         self.assertEqual(result["observed_flights"], 2)
         self.assertEqual(result["unknown_other_airport"], 1)
         self.assertEqual(result["flights"][0]["haul"], "long_haul")
+
+    @patch("airport_agent.aviation._airport_details_many", return_value={})
+    @patch("airport_agent.aviation._opensky_client")
+    @patch("airport_agent.aviation.airport_details", return_value={"icaoId": "PANC"})
+    def test_failed_opensky_response_is_not_zero_flights(self, details, client_factory, details_many):
+        query = FlightQuery(airport="ANC", start_date="2026-09-07", end_date="2026-09-07")
+        for direction, method in [("departure", "get_departures_by_airport"), ("arrival", "get_arrivals_by_airport")]:
+            with self.subTest(direction=direction):
+                getattr(client_factory.return_value, method).return_value = None
+                with self.assertRaises(AviationDataError):
+                    get_flights(query, direction)
+                getattr(client_factory.return_value, method).return_value = []
+                self.assertEqual(get_flights(query, direction)["observed_flights"], 0)
 
 
 if __name__ == "__main__":

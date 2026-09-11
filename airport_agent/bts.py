@@ -1,57 +1,32 @@
-"""Cached, narrow access to BTS T-100 traffic data."""
+"""Cached, airport-and-period queries to the public BTS T-100 summary API."""
 
 from __future__ import annotations
 
-import csv
+from contextlib import closing
 from datetime import UTC, datetime
-from html.parser import HTMLParser
-from io import BytesIO, TextIOWrapper
+import json
 from pathlib import Path
 import sqlite3
+import time
 from typing import Literal
-from zipfile import BadZipFile, ZipFile
 
 import httpx
-from pydantic import Field, field_validator, model_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
-from airport_agent.aviation import AirportQuery, AviationDataError, airport_details
+from airport_agent.aviation import AirportQuery, AviationDataError, _client, _json, airport_details
 
-BTS_T100_URL = "https://www.transtats.bts.gov/DL_SelectFields.aspx?QO_fu146_anzr=Nv4Pn&gnoyr_VQ=FMG"
+BTS_T100_URL = "https://data.bts.gov/resource/r495-tyji.json"
 CACHE_PATH = Path(__file__).resolve().parent.parent / ".cache" / "t100.sqlite3"
-FIELDS = (
-    "DEPARTURES_SCHEDULED",
-    "DEPARTURES_PERFORMED",
-    "SEATS",
-    "PASSENGERS",
-    "DISTANCE",
-    "ORIGIN",
-    "DEST",
-    "YEAR",
-    "MONTH",
-    "CLASS",
-)
-STATE_NAMES = {
-    "AL": "Alabama", "AK": "Alaska", "AZ": "Arizona", "AR": "Arkansas",
-    "CA": "California", "CO": "Colorado", "CT": "Connecticut", "DE": "Delaware",
-    "FL": "Florida", "GA": "Georgia", "HI": "Hawaii", "ID": "Idaho",
-    "IL": "Illinois", "IN": "Indiana", "IA": "Iowa", "KS": "Kansas",
-    "KY": "Kentucky", "LA": "Louisiana", "ME": "Maine", "MD": "Maryland",
-    "MA": "Massachusetts", "MI": "Michigan", "MN": "Minnesota", "MS": "Mississippi",
-    "MO": "Missouri", "MT": "Montana", "NE": "Nebraska", "NV": "Nevada",
-    "NH": "New Hampshire", "NJ": "New Jersey", "NM": "New Mexico", "NY": "New York",
-    "NC": "North Carolina", "ND": "North Dakota", "OH": "Ohio", "OK": "Oklahoma",
-    "OR": "Oregon", "PA": "Pennsylvania", "RI": "Rhode Island", "SC": "South Carolina",
-    "SD": "South Dakota", "TN": "Tennessee", "TX": "Texas", "UT": "Utah",
-    "VT": "Vermont", "VA": "Virginia", "WA": "Washington", "WV": "West Virginia",
-    "WI": "Wisconsin", "WY": "Wyoming", "DC": "District of Columbia",
-}
+CACHE_TTL_SECONDS = 24 * 60 * 60
+SERVICE_SCOPE = "all reported commercial services; passenger and cargo, scheduled and nonscheduled"
 
 
 class TrafficQuery(AirportQuery):
-    start_month: str = Field(description="Inclusive month in YYYY-MM format")
-    end_month: str = Field(description="Inclusive month in YYYY-MM format")
-    direction: Literal["outbound", "inbound", "both"] = "both"
-    route_limit: int = Field(default=10, ge=1, le=25)
+    model_config = ConfigDict(extra="forbid")
+
+    start_month: str = Field(pattern=r"^\d{4}-\d{2}$", description="Inclusive month in YYYY-MM format")
+    end_month: str = Field(pattern=r"^\d{4}-\d{2}$", description="Inclusive month in YYYY-MM format")
+    direction: Literal["outbound"] = "outbound"
 
     @field_validator("start_month", "end_month")
     @classmethod
@@ -64,158 +39,103 @@ class TrafficQuery(AirportQuery):
 
     @model_validator(mode="after")
     def valid_period(self) -> TrafficQuery:
-        start, end = _month_key(self.start_month), _month_key(self.end_month)
-        if end < start:
+        if self.end_month < self.start_month:
             raise ValueError("end_month must be on or after start_month")
-        if end[0] - start[0] > 4:
+        if int(self.end_month[:4]) - int(self.start_month[:4]) > 4:
             raise ValueError("T-100 queries are limited to five calendar years")
         return self
 
 
-class _HiddenFields(HTMLParser):
-    def __init__(self):
-        super().__init__()
-        self.values: dict[str, str] = {}
-
-    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
-        attributes = dict(attrs)
-        if tag == "input" and attributes.get("type") == "hidden" and attributes.get("name"):
-            self.values[attributes["name"]] = attributes.get("value") or ""
+class _TrafficMonth(BaseModel):
+    origin_airport_code: str
+    reporting_month: datetime
+    total_departures: int = Field(ge=0)
+    total_passengers: int = Field(ge=0)
+    total_seats: int = Field(ge=0)
 
 
-def _month_key(value: str) -> tuple[int, int]:
-    year, month = value.split("-")
-    return int(year), int(month)
-
-
-def _cache() -> sqlite3.Connection:
-    CACHE_PATH.parent.mkdir(exist_ok=True)
-    connection = sqlite3.connect(CACHE_PATH)
-    connection.execute(
-        "CREATE TABLE IF NOT EXISTS responses "
-        "(geography TEXT, year INTEGER, payload BLOB, fetched_at TEXT, "
-        "PRIMARY KEY (geography, year))"
-    )
-    return connection
-
-
-def _fetch_year(geography: str, year: int) -> bytes:
+def _fetch_months(airport: str, start: str, end: str) -> list[dict]:
+    params = {
+        "$select": ",".join(_TrafficMonth.model_fields),
+        "$where": (
+            f"origin_airport_code = '{airport}' AND "
+            f"reporting_month >= '{start}-01T00:00:00' AND "
+            f"reporting_month <= '{end}-01T00:00:00'"
+        ),
+        "$order": "reporting_month",
+        "$limit": 1000,
+    }
     try:
-        with httpx.Client(timeout=60, follow_redirects=True) as client:
-            page = client.get(BTS_T100_URL)
-            page.raise_for_status()
-            parser = _HiddenFields()
-            parser.feed(page.text)
-            form = parser.values | {
-                "cboGeography": geography,
-                "cboYear": str(year),
-                "cboPeriod": "All",
-                "btnDownload": "Download",
-            }
-            form.update({field: "on" for field in FIELDS})
-            response = client.post(BTS_T100_URL, data=form)
-            response.raise_for_status()
+        with _client() as client:
+            rows = _json(client.get(BTS_T100_URL, params=params), "BTS T-100")
     except httpx.HTTPError as exc:
         raise AviationDataError(f"BTS T-100 request failed: {exc}") from exc
-    if not response.content.startswith(b"PK"):
-        raise AviationDataError("BTS T-100 returned an unexpected response")
-    return response.content
+    # A five-year query needs at most 60 monthly rows.
+    if not isinstance(rows, list) or len(rows) >= 1000:
+        raise AviationDataError("BTS T-100 returned an unexpected or truncated response")
+    return rows
 
 
-def _load_year(geography: str, year: int) -> tuple[bytes, bool]:
-    with _cache() as connection:
-        row = connection.execute(
-            "SELECT payload FROM responses WHERE geography = ? AND year = ?",
-            (geography, year),
-        ).fetchone()
-        if row:
-            return row[0], True
-        payload = _fetch_year(geography, year)
+def _load_months(airport: str, start: str, end: str) -> tuple[list[_TrafficMonth], dict]:
+    CACHE_PATH.parent.mkdir(exist_ok=True)
+    key = (airport, start, end)
+    with closing(sqlite3.connect(CACHE_PATH)) as connection, connection:
+        # Old ZIP cache entries are left untouched and are never read.
         connection.execute(
-            "INSERT OR REPLACE INTO responses VALUES (?, ?, ?, ?)",
-            (geography, year, payload, datetime.now(UTC).isoformat()),
+            "CREATE TABLE IF NOT EXISTS airport_summaries "
+            "(airport TEXT, start_month TEXT, end_month TEXT, payload TEXT, fetched_at REAL, "
+            "PRIMARY KEY (airport, start_month, end_month))"
         )
-        return payload, False
-
-
-def _rows(payload: bytes):
-    try:
-        archive = ZipFile(BytesIO(payload))
-        csv_name = next(name for name in archive.namelist() if name.lower().endswith(".csv"))
-    except (BadZipFile, StopIteration) as exc:
-        raise AviationDataError("BTS T-100 archive did not contain a CSV file") from exc
-    with archive, archive.open(csv_name) as raw, TextIOWrapper(raw, encoding="utf-8-sig", newline="") as text:
-        for row in csv.DictReader(text):
-            yield {key.strip(): (value or "").strip() for key, value in row.items() if key}
-
-
-def _number(row: dict[str, str], field: str) -> float:
-    try:
-        return float(row.get(field) or 0)
-    except ValueError:
-        return 0
-
-
-def _clean(value: float) -> int | float:
-    return int(value) if value.is_integer() else round(value, 2)
+        cached = connection.execute(
+            "SELECT payload, fetched_at FROM airport_summaries "
+            "WHERE airport = ? AND start_month = ? AND end_month = ?", key,
+        ).fetchone()
+        hit = bool(cached and 0 <= time.time() - cached[1] < CACHE_TTL_SECONDS)
+        raw = json.loads(cached[0]) if hit else _fetch_months(*key)
+        try:
+            rows = [_TrafficMonth.model_validate(row) for row in raw]
+        except ValueError as exc:
+            raise AviationDataError("BTS T-100 returned missing or invalid monthly totals") from exc
+        months = [row.reporting_month.strftime("%Y-%m") for row in rows]
+        if (len(set(months)) != len(months)
+                or any(row.origin_airport_code != airport for row in rows)
+                or any(not start <= month <= end for month in months)):
+            raise AviationDataError("BTS T-100 returned duplicate months or rows outside the requested airport/period")
+        fetched_at = cached[1] if hit else time.time()
+        if not hit:
+            connection.execute(
+                "INSERT OR REPLACE INTO airport_summaries VALUES (?, ?, ?, ?, ?)",
+                (*key, json.dumps(raw), fetched_at),
+            )
+    return rows, {"hit": hit, "fetched_at": datetime.fromtimestamp(fetched_at, UTC).isoformat()}
 
 
 def airport_traffic(query: TrafficQuery) -> dict:
     airport = airport_details(query.airport)
-    airport_code = airport.get("iataId") or query.airport
-    geography = STATE_NAMES.get(airport.get("state", ""))
-    if airport.get("country") != "US" or not geography:
-        raise AviationDataError("T-100 geography filtering currently supports US airports")
-
-    start, end = _month_key(query.start_month), _month_key(query.end_month)
-    cache_hits, fetched, selected = [], [], []
-    for year in range(start[0], end[0] + 1):
-        payload, hit = _load_year(geography, year)
-        (cache_hits if hit else fetched).append(year)
-        for row in _rows(payload):
-            key = (int(_number(row, "YEAR")), int(_number(row, "MONTH")))
-            if not start <= key <= end or row.get("CLASS") != "F" or _number(row, "SEATS") <= 0:
-                continue
-            origin, destination = row.get("ORIGIN"), row.get("DEST")
-            matches = (
-                query.direction == "both" and airport_code in {origin, destination}
-                or query.direction == "outbound" and origin == airport_code
-                or query.direction == "inbound" and destination == airport_code
-            )
-            if matches:
-                selected.append(row)
-
-    totals = {field: sum(_number(row, field) for row in selected) for field in FIELDS[:4]}
-    routes: dict[str, dict[str, float]] = {}
-    for row in selected:
-        other = row["DEST"] if row["ORIGIN"] == airport_code else row["ORIGIN"]
-        route = routes.setdefault(other, {field: 0 for field in FIELDS[:4]})
-        for field in route:
-            route[field] += _number(row, field)
-
-    def summary(values: dict[str, float]) -> dict:
-        seats, passengers = values["SEATS"], values["PASSENGERS"]
-        return {
-            "scheduled_departures": _clean(values["DEPARTURES_SCHEDULED"]),
-            "performed_departures": _clean(values["DEPARTURES_PERFORMED"]),
-            "scheduled_minus_performed": _clean(values["DEPARTURES_SCHEDULED"] - values["DEPARTURES_PERFORMED"]),
-            "available_seats": _clean(seats),
-            "passengers": _clean(passengers),
-            "passenger_load_factor_pct": round(passengers / seats * 100, 2) if seats else None,
-        }
-
-    top_routes = [
-        {"other_airport": code, **summary(values)}
-        for code, values in sorted(routes.items(), key=lambda item: item[1]["PASSENGERS"], reverse=True)[: query.route_limit]
-    ]
+    if airport.get("country") != "US":
+        raise AviationDataError("This BTS T-100 summary supports US origin airports")
+    airport_code = AirportQuery(airport=airport.get("iataId") or query.airport).airport
+    rows, cache = _load_months(airport_code, query.start_month, query.end_month)
+    seats = sum(row.total_seats for row in rows)
+    passengers = sum(row.total_passengers for row in rows)
     return {
         "airport": airport_code,
         "period": {"start_month": query.start_month, "end_month": query.end_month},
         "direction": query.direction,
-        "service": "scheduled passenger service",
-        "totals": summary(totals),
-        "top_routes_by_passengers": top_routes,
-        "cache": {"years_reused": cache_hits, "years_fetched": fetched},
-        "source": {"name": "BTS T-100 Segment (All Carriers)", "url": BTS_T100_URL},
-        "limitations": "Monthly reported traffic and capacity; it measures served passengers, not latent demand. Scheduled minus performed is not a cancellation count and can be negative.",
+        "service": SERVICE_SCOPE,
+        "totals": {
+            "performed_departures": sum(row.total_departures for row in rows),
+            "available_seats": seats,
+            "passengers": passengers,
+            "passenger_load_factor_pct": round(passengers / seats * 100, 2) if seats else None,
+        },
+        "months_with_data": sorted(row.reporting_month.strftime("%Y-%m") for row in rows),
+        "cache": cache,
+        "source": {"name": "BTS AFF - T100 Segment Summary By Origin Airport", "url": BTS_T100_URL},
+        "limitations": (
+            "Domestic and outbound international commercial traffic, with no service-class filter. "
+            "Departure counts include cargo operations. This summary provides no route breakdown, "
+            "scheduled-flight counts, cancellations, or complete inbound totals. It measures served "
+            "passengers and seats, not latent demand or physical airport capacity."
+        ),
     }

@@ -1,0 +1,121 @@
+{
+  "verified_at": "2026-09-10T08:09:11.284639+00:00",
+  "access": {
+    "client": "httpx",
+    "response_format": "HTML",
+    "http_status": 200,
+    "documented_json_api_verified": false,
+    "api_key_required": false,
+    "bulk_download_used": false
+  },
+  "arrival_summary": {
+    "airport": "SFO",
+    "period": "2025-01",
+    "carrier_filter": "All reporting carriers",
+    "source": "https://www.transtats.bts.gov/OT_Delay/ot_delaycause1.asp?qv52ynB=qn6n&20=E",
+    "request_method": "POST",
+    "request_form": {
+      "Carrier": "All",
+      "Airport": "SFO::San%20Francisco%2C%20CA%3A%20San%20Francisco%20International",
+      "PeriodFrom": "24301",
+      "PeriodTo": "24301"
+    },
+    "columns": [
+      "category",
+      "operations",
+      "percent_of_total_operations",
+      "delayed_minutes",
+      "percent_of_total_delayed_minutes"
+    ],
+    "published_rows": [
+      [
+        "On Time",
+        "9,331",
+        "83.60%",
+        "N/A",
+        "N/A"
+      ],
+      [
+        "Air Carrier Delay",
+        "642",
+        "5.75%",
+        "42,639",
+        "37.01%"
+      ],
+      [
+        "Weather Delay",
+        "75",
+        "0.67%",
+        "7,520",
+        "6.53%"
+      ],
+      [
+        "National Aviation System Delay",
+        "498",
+        "4.46%",
+        "23,154",
+        "20.10%"
+      ],
+      [
+        "Security Delay",
+        "8",
+        "0.07%",
+        "236",
+        "0.20%"
+      ],
+      [
+        "Aircraft Arriving Late",
+        "501",
+        "4.49%",
+        "41,664",
+        "36.16%"
+      ],
+      [
+        "Cancelled",
+        "101",
+        "0.90%",
+        "N/A",
+        "N/A"
+      ],
+      [
+        "Diverted",
+        "6",
+        "0.05%",
+        "N/A",
+        "N/A"
+      ],
+      [
+        "Total Operations",
+        "11,161",
+        "100.00%",
+        "115,213",
+        "100.00%"
+      ]
+    ],
+    "coverage": "Reported domestic arrival performance; not all commercial T-100 traffic.",
+    "notes": [
+      "Delay means arrival at least 15 minutes late.",
+      "Cause counts are prorated and rounded; do not sum them as exact delayed-flight counts.",
+      "Delayed minutes cover delayed flights only."
+    ]
+  },
+  "departure_sample": {
+    "airport": "SFO",
+    "date": "2025-01-15",
+    "carrier": "UA",
+    "source": "https://www.transtats.bts.gov/ONTIME/Departures.aspx",
+    "rows_on_first_page": 100,
+    "pagination_present": true,
+    "all_pages_fetched": false,
+    "flight": {
+      "number": "1960",
+      "destination": "LAX",
+      "scheduled_departure_local": "15:20",
+      "actual_departure_local": "15:47",
+      "departure_delay_minutes": 27,
+      "wheels_off_local": "16:04",
+      "taxi_out_minutes": 17
+    }
+  },
+  "physical_capacity_api_verified": false
+}
