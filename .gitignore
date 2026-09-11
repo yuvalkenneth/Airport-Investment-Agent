@@ -5,5 +5,5 @@ __pycache__/
 .env.*
 !.env.example
 .DS_Store
-samples/*/
+samples/
 .cache/
