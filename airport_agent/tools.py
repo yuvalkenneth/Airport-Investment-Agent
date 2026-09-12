@@ -20,7 +20,7 @@ def calculate_percentage(part: float, total: float) -> dict:
 
 @tool(args_schema=AirportQuery)
 def get_airport_details(airport: str) -> dict:
-    """Get airport identifiers, coordinates, runways, and basic facilities from AWC."""
+    """Get airport identifiers, coordinates, runways, and basic facilities from AWC. Report returned fields only; runway identifiers, headings, and dimensions do not establish spacing, operating roles, aircraft compatibility, or capacity."""
     try:
         return airport_details(airport)
     except AviationDataError as exc:

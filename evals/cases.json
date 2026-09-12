@@ -1,0 +1,250 @@
+[
+  {
+    "id": "direct-sfo-performance",
+    "difficulty": 1,
+    "category": "direct_lookup",
+    "question": "What were SFO's arrival delay rate, cancellation rate, average delay, and leading reported delay cause in January 2025?",
+    "expected_tools": ["get_airport_performance"],
+    "reference_calls": [{"tool": "get_airport_performance", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Report the January 2025 BTS domestic-arrival figures: 15.44% delayed, 0.90% cancelled, 66.87 average minutes among delayed arrivals, and Air Carrier Delay leading at 37.01%. Do not infer a physical-capacity bottleneck."
+  },
+  {
+    "id": "direct-sfo-traffic",
+    "difficulty": 1,
+    "category": "direct_lookup",
+    "question": "How many outbound passengers, available seats, and performed departures did SFO report in January 2025?",
+    "expected_tools": ["get_airport_traffic"],
+    "reference_calls": [{"tool": "get_airport_traffic", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01", "direction": "outbound"}}],
+    "reference_answer": "Give the exact T-100 totals from the evidence, label the direction and period, and call departures performed rather than scheduled passenger flights."
+  },
+  {
+    "id": "direct-sfo-runways",
+    "difficulty": 1,
+    "category": "direct_lookup",
+    "question": "Describe SFO's runway infrastructure.",
+    "expected_tools": ["get_airport_details"],
+    "reference_calls": [{"tool": "get_airport_details", "args": {"airport": "SFO"}}],
+    "reference_answer": "Describe the runway facts returned by Aviation Weather Center. Explain that runway count and dimensions do not establish usable hourly capacity."
+  },
+  {
+    "id": "direct-sfo-faa-status",
+    "difficulty": 1,
+    "category": "live_lookup",
+    "question": "Are there any active FAA delay, closure, or ground-stop events at SFO right now?",
+    "expected_tools": ["get_airport_status"],
+    "reference_calls": [{"tool": "get_airport_status", "args": {"airport": "SFO"}}],
+    "reference_answer": "Match the fresh FAA NAS event count and details, state that the result is current, and make no historical claim."
+  },
+  {
+    "id": "direct-sfo-weather",
+    "difficulty": 1,
+    "category": "live_lookup",
+    "question": "What are the current aviation weather conditions at SFO?",
+    "expected_tools": ["get_aviation_weather"],
+    "reference_calls": [{"tool": "get_aviation_weather", "args": {"airport": "SFO"}}],
+    "reference_answer": "Faithfully summarize the latest SFO METAR and observation time. Do not use current weather to explain historical performance."
+  },
+  {
+    "id": "new-england-growth-screen",
+    "difficulty": 2,
+    "category": "assignment_clarified",
+    "question": "Among BOS, BDL, PVD, MHT, and BGR, which should be investigated first for terminal expansion using outbound passenger growth in January 2025 versus January 2024, with occupancy as the tiebreaker? Show absolute growth too.",
+    "expected_tools": ["compare_airport_growth"],
+    "reference_calls": [{"tool": "compare_airport_growth", "args": {"airports": ["BOS", "BDL", "PVD", "MHT", "BGR"], "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Follow the returned ranking exactly, show percentage and absolute passenger growth, identify the screen leader, expose small-base effects, and describe this as a growth screen rather than proof of expansion returns."
+  },
+  {
+    "id": "lax-sna-congestion-screen",
+    "difficulty": 2,
+    "category": "assignment_clarified",
+    "question": "Compare LAX and SNA congestion in January 2025 using BTS domestic arrival delay rate, with cancellation rate as the tiebreaker. Explain the main reported delay causes.",
+    "expected_tools": ["compare_airport_performance"],
+    "reference_calls": [{"tool": "compare_airport_performance", "args": {"airports": ["LAX", "SNA"], "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Follow the exact delay-rate ranking; use cancellation only as a tiebreaker. Report cause shares as attribution, not root-cause or physical-capacity proof."
+  },
+  {
+    "id": "three-airport-growth-screen",
+    "difficulty": 2,
+    "category": "ranking",
+    "question": "Rank SFO, LAX, and SNA by outbound passenger growth for January through December 2025 versus the same months in 2024. Explain the ranking.",
+    "expected_tools": ["compare_airport_growth"],
+    "reference_calls": [{"tool": "compare_airport_growth", "args": {"airports": ["SFO", "LAX", "SNA"], "start_month": "2025-01", "end_month": "2025-12"}}],
+    "reference_answer": "Make no additional data calls beyond the complete growth screen. Match its rank order and figures, include absolute passenger changes and occupancy, and keep the explanation focused on the requested ranking."
+  },
+  {
+    "id": "anc-long-haul-share",
+    "difficulty": 2,
+    "category": "assignment_clarified",
+    "question": "What percentage of observed outbound flights from ANC on September 7, 2026 UTC were confirmed long-haul, using routes over 3,000 statute miles and keeping unknown destinations in the denominator?",
+    "expected_tools": ["get_outbound_flights", "get_outbound_flights", "calculate_percentage"],
+    "reference_calls": [
+      {"tool": "get_outbound_flights", "args": {"airport": "ANC", "start_date": "2026-09-07", "end_date": "2026-09-07", "haul": "all", "limit": 1}},
+      {"tool": "get_outbound_flights", "args": {"airport": "ANC", "start_date": "2026-09-07", "end_date": "2026-09-07", "haul": "long_haul", "limit": 1}}
+    ],
+    "reference_derivation": "long_haul_share",
+    "reference_answer": "Divide confirmed long-haul matching flights by all observed outbound flights for the identical date range using the calculation tool. Include unknown destinations in the denominator and call the result a lower bound within incomplete OpenSky observations."
+  },
+  {
+    "id": "jfk-lax-long-haul-definition",
+    "difficulty": 2,
+    "category": "deterministic_calculation",
+    "question": "Under the defined 3,000-statute-mile rule, does a nonstop route between JFK and LAX count as long-haul?",
+    "expected_tools": ["get_airport_details", "get_airport_details", "calculate_route_distance"],
+    "reference_calls": [
+      {"tool": "get_airport_details", "args": {"airport": "JFK"}},
+      {"tool": "get_airport_details", "args": {"airport": "LAX"}}
+    ],
+    "reference_derivation": "route_distance",
+    "reference_answer": "Use the airports' coordinates and deterministic great-circle distance. Because the result is below the strict greater-than-3,000-mile threshold, classify JFK-LAX as not long-haul under this project definition."
+  },
+  {
+    "id": "sfo-demand-pressure",
+    "difficulty": 3,
+    "category": "assignment_clarified",
+    "question": "Assess unmet demand at SFO using the demand-pressure proxy for January 2025 versus January 2024. Show passenger growth, seat growth, occupancy, and domestic arrival disruption separately.",
+    "expected_tools": ["get_airport_demand_pressure"],
+    "reference_calls": [{"tool": "get_airport_demand_pressure", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Apply the returned signal exactly. Keep occupancy and domestic arrival disruption separate, call unmet demand unmeasured, and explain that a negative proxy signal does not prove latent demand is absent."
+  },
+  {
+    "id": "sfo-sna-opportunity",
+    "difficulty": 3,
+    "category": "investment_screen",
+    "question": "Compare SFO and SNA for modernization opportunity from January through December 2025 versus 2024 using the defined screen. Which should be investigated first?",
+    "expected_tools": ["compare_airport_opportunity"],
+    "reference_calls": [{"tool": "compare_airport_opportunity", "args": {"airports": ["SFO", "SNA"], "start_month": "2025-01", "end_month": "2025-12"}}],
+    "reference_answer": "Use only the named opportunity screen. Match its dimension winners and overall result, show the visible evidence, and do not present the leader as a proven profitable expansion."
+  },
+  {
+    "id": "opportunity-plus-live-context",
+    "difficulty": 3,
+    "category": "multi_source_reasoning",
+    "question": "Compare SFO and SNA using the modernization-opportunity screen for January through December 2025 versus the same months in 2024, then add runway facts and current FAA operating context. Keep the infrastructure facts outside the score.",
+    "expected_tools": ["compare_airport_opportunity", "get_airport_details", "get_airport_details", "get_airport_status", "get_airport_status"],
+    "reference_calls": [
+      {"tool": "compare_airport_opportunity", "args": {"airports": ["SFO", "SNA"], "start_month": "2025-01", "end_month": "2025-12"}},
+      {"tool": "get_airport_details", "args": {"airport": "SFO"}},
+      {"tool": "get_airport_details", "args": {"airport": "SNA"}},
+      {"tool": "get_airport_status", "args": {"airport": "SFO"}},
+      {"tool": "get_airport_status", "args": {"airport": "SNA"}}
+    ],
+    "reference_answer": "Match the defined screen result. Present runway facts and current FAA events separately and do not let them alter the deterministic score or explain the historical 2025 result."
+  },
+  {
+    "id": "bos-demand-pressure",
+    "difficulty": 3,
+    "category": "proxy_reasoning",
+    "question": "Did growing outbound traffic at BOS outpace airline seat supply in January 2025 compared with January 2024, and what does its occupancy imply?",
+    "expected_tools": ["get_airport_demand_pressure"],
+    "reference_calls": [{"tool": "get_airport_demand_pressure", "args": {"airport": "BOS", "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Apply both signal requirements and match the returned figures. Explain occupancy as airline seat utilization, not runway or terminal utilization."
+  },
+  {
+    "id": "bos-pvd-disruption",
+    "difficulty": 3,
+    "category": "comparison",
+    "question": "Which was more operationally disrupted in January 2025, BOS or PVD, and what reported delay categories dominated at each?",
+    "expected_tools": ["compare_airport_performance"],
+    "reference_calls": [{"tool": "compare_airport_performance", "args": {"airports": ["BOS", "PVD"], "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Match the returned ranking and cause shares. Rank by delay rate before cancellation and describe categories as reported attribution rather than root causes. Air Carrier Delay may be explained as circumstances within airline control and Aircraft Arriving Late as propagated delay, provided the original cause is not claimed."
+  },
+  {
+    "id": "scheduled-passenger-boundary",
+    "difficulty": 4,
+    "category": "source_boundary",
+    "question": "How many scheduled passenger flights departed SFO in January 2025?",
+    "expected_tools": [],
+    "optional_tools": ["get_airport_traffic"],
+    "reference_calls": [{"tool": "get_airport_traffic", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01", "direction": "outbound"}}],
+    "reference_answer": "Explain that T-100 supplies performed departures across reported service classes and may include cargo, so the requested scheduled-passenger count is unavailable. Do not relabel or convert the performed-departure total."
+  },
+  {
+    "id": "all-arrivals-boundary",
+    "difficulty": 4,
+    "category": "source_boundary",
+    "question": "What percentage of all domestic and international arrivals at SFO were at least 15 minutes late in January 2025?",
+    "expected_tools": [],
+    "optional_tools": ["get_airport_performance"],
+    "reference_calls": [{"tool": "get_airport_performance", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "State that the source only supports domestic arrivals. The domestic rate may be given with that label, but it must not be presented as an all-arrivals rate."
+  },
+  {
+    "id": "historical-weather-causality",
+    "difficulty": 4,
+    "category": "clarification_and_causality",
+    "question": "Did weather cause SFO's 2025 traffic trend?",
+    "expected_tools": [],
+    "reference_calls": [],
+    "reference_answer": "Ask which comparison period defines the 2025 trend before collecting data. Do not call current-weather or FAA-status data to explain a historical trend, and do not claim causality from traffic totals."
+  },
+  {
+    "id": "unserved-passenger-count-boundary",
+    "difficulty": 4,
+    "category": "proxy_boundary",
+    "question": "How many passengers wanted to fly from SFO in January 2025 but could not get a seat?",
+    "expected_tools": [],
+    "optional_tools": ["get_airport_demand_pressure"],
+    "reference_calls": [{"tool": "get_airport_demand_pressure", "args": {"airport": "SFO", "start_month": "2025-01", "end_month": "2025-01"}}],
+    "reference_answer": "Say that served passenger and seat data cannot measure this count. The proxy evidence may be reported, but seats minus passengers must not be called unmet demand."
+  },
+  {
+    "id": "physical-capacity-boundary",
+    "difficulty": 4,
+    "category": "infrastructure_boundary",
+    "question": "Using SNA's published runway facts, can you determine whether it operates at its physical capacity ceiling?",
+    "expected_tools": ["get_airport_details"],
+    "reference_calls": [{"tool": "get_airport_details", "args": {"airport": "SNA"}}],
+    "reference_answer": "Verify only the available runway facts, then explain that runway count and length cannot establish physical capacity utilization. Identify the missing peak-hour throughput, configuration, gates, terminal constraints, demand schedule, and operating restrictions."
+  },
+  {
+    "id": "assignment-new-england-clarification",
+    "difficulty": 5,
+    "category": "assignment_ambiguous",
+    "question": "Which airports in New England are strong candidates for terminal expansion?",
+    "expected_tools": [],
+    "reference_calls": [],
+    "minimum_score": 10,
+    "reference_answer": "Ask one concise clarification covering the airport set and analysis period. The already-defined growth screen may be stated as the method; do not silently reuse a demo shortlist."
+  },
+  {
+    "id": "assignment-la-clarification",
+    "difficulty": 5,
+    "category": "assignment_ambiguous",
+    "question": "Compare LA and Santa Ana airport congestion.",
+    "expected_tools": [],
+    "reference_calls": [],
+    "minimum_score": 10,
+    "reference_answer": "Confirm that LA means LAX and Santa Ana means SNA and ask for a period in one concise clarification. The already-defined domestic-arrival congestion screen may be stated as the method. Do not collect data first."
+  },
+  {
+    "id": "assignment-anc-clarification",
+    "difficulty": 5,
+    "category": "assignment_ambiguous",
+    "question": "What is the percentage of long-haul flights out of Anchorage airport?",
+    "expected_tools": [],
+    "reference_calls": [],
+    "minimum_score": 10,
+    "reference_answer": "Ask for an explicit completed UTC date range before collecting data. The fixed greater-than-3,000-mile definition and seven-day request limit may be stated."
+  },
+  {
+    "id": "assignment-sfo-clarification",
+    "difficulty": 5,
+    "category": "assignment_ambiguous",
+    "question": "What is the unmet flight demand at SFO and why?",
+    "expected_tools": [],
+    "reference_calls": [],
+    "minimum_score": 10,
+    "reference_answer": "Ask for the period and confirm use of the defined demand-pressure proxy. Briefly state that unmet demand is not directly observed, and collect no data before clarification."
+  },
+  {
+    "id": "opportunity-conversational-followup",
+    "difficulty": 5,
+    "category": "follow_up",
+    "setup_question": "Compare SFO and SNA for modernization opportunity from January through December 2025 versus 2024 using the defined screen. Which should be investigated first?",
+    "setup_expected_tools": ["compare_airport_opportunity"],
+    "question": "What does that imply for terminal expansion?",
+    "expected_tools": [],
+    "reference_calls": [{"tool": "compare_airport_opportunity", "args": {"airports": ["SFO", "SNA"], "start_month": "2025-01", "end_month": "2025-12"}}],
+    "reference_answer": "Reuse the prior screen without another tool call. Explain what its leader and dimension votes imply for further investigation, while stating that terminal constraints, feasibility, costs, and returns remain unmeasured."
+  }
+]

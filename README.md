@@ -124,6 +124,14 @@ latent demand, establish infrastructure constraints, or prove profitability.
 
 Offline checks: `uv run python -m unittest discover`.
 
+## Evaluation suite
+
+The [evaluation suite](evals/README.md) contains 25 tool-grounded cases, including
+the four assignment questions, clarified variants, KPI screens, source-boundary
+tests, and a conversational follow-up. It generates fresh reference evidence from
+the deterministic tools and uses a separate OpenRouter call to judge the agent's
+answer and routing.
+
 ## Two-airport opportunity screen
 
 Try: "Compare SFO and SNA for modernization and growth opportunity from January
