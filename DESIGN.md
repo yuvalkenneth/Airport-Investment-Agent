@@ -55,9 +55,9 @@ and the underlying volumes so a small base is visible.
 - Seat occupancy = `current passengers / current seats × 100`.
 
 Missing monthly rows or nonpositive required baselines exclude an airport from
-ranking. Monthly rows do not guarantee complete carrier reporting. A default
-New England demo shortlist is BOS, BDL, PVD, MHT, and BGR; it is not an exhaustive
-regional airport inventory or a peer-normalized investment score.
+ranking. Monthly rows do not guarantee complete carrier reporting. Regional
+questions must provide or clarify the airport set; any shortlist used in a demo
+is not an exhaustive regional inventory or a peer-normalized investment score.
 
 **Congestion comparison:** rank domestic arrival delay rate descending, then
 cancellation rate descending. First means more disrupted. Both rates divide by

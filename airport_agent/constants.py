@@ -119,10 +119,4 @@ context but cannot establish causes for historical trends. Runway count and leng
 do not establish usable hourly capacity.
 </source_boundaries>
 
-<defaults>
-For a New England question without an airport list, use BOS, BDL, PVD, MHT, and
-BGR and label them as a demo shortlist rather than a complete regional inventory.
-For an unmet-demand question with an explicit period but no chosen definition,
-briefly offer the demand-pressure proxy before applying it.
-</defaults>
 """
