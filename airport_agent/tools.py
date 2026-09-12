@@ -90,7 +90,7 @@ def calculate_route_distance(origin_lat: float, origin_lon: float, destination_l
 
 @tool(args_schema=ComparisonQuery)
 def compare_airport_growth(**kwargs) -> dict:
-    """Rank US airports by outbound passenger growth versus the same months last year, then occupancy. Return growth, seats, coverage exclusions, and evidence."""
+    """Return the complete named growth screen for 2-10 US airports: outbound passenger growth versus the same months last year, then occupancy, with seats, totals, and exclusions. Do not add performance or demand-pressure data unless the user explicitly asks for those dimensions."""
     try:
         return compare_growth(ComparisonQuery(**kwargs))
     except (AviationDataError, ValueError) as exc:
@@ -108,7 +108,7 @@ def compare_airport_performance(**kwargs) -> dict:
 
 @tool(args_schema=OpportunityQuery)
 def compare_airport_opportunity(**kwargs) -> dict:
-    """Compare exactly two US airports on growth momentum, airline supply pressure, and domestic arrival disruption. Each visible dimension gets one vote; two wins produce the screen leader. This is not an investment return or physical-capacity model."""
+    """Return the complete named opportunity screen for exactly two US airports: growth momentum, airline supply pressure, and domestic arrival disruption. Each visible dimension gets one vote; two wins produce the leader. Add infrastructure or other context only when explicitly requested. This is not an investment return or physical-capacity model."""
     try:
         return compare_opportunity(OpportunityQuery(**kwargs))
     except (AviationDataError, ValueError) as exc:
@@ -117,7 +117,7 @@ def compare_airport_opportunity(**kwargs) -> dict:
 
 @tool(args_schema=PerformanceQuery)
 def get_airport_demand_pressure(**kwargs) -> dict:
-    """Assess an unmet-demand proxy: passenger growth versus seat growth against the same months last year, with occupancy and domestic arrival delays as separate evidence. Returns a deterministic pressure signal, not unserved flight counts or proven causes."""
+    """Return the complete demand-pressure proxy for one airport: passenger growth versus seat growth against the same months last year, occupancy, and the full domestic arrival performance report when available. Do not request that performance separately for the same airport and period. This is not an unserved-flight count or proof of cause."""
     try:
         return demand_pressure(PerformanceQuery(**kwargs))
     except (AviationDataError, ValueError) as exc:
