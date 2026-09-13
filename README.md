@@ -1,9 +1,32 @@
 # Airport Investment Agent
 
-A minimal terminal chat using Python, uv, one LangChain agent, and OpenRouter.
+## Overview
 
-See [DESIGN.md](DESIGN.md) for the scoring rules, source tradeoffs, and four
-assignment demo questions.
+The Airport Investment Agent is a conversational screening tool for US airport
+modernization opportunities. It combines public aviation data with deterministic
+KPI calculations, then uses an LLM to choose the appropriate analysis and explain
+the result.
+
+The product is a first-pass research assistant. It can identify signals worth
+investigating, such as strong passenger growth, airline seat pressure, or poor
+arrival reliability. It does not forecast investment returns, measure latent
+demand directly, or prove that an airport has reached its physical capacity.
+
+```mermaid
+flowchart LR
+    U[User question] --> A[LangChain agent]
+    A --> T[Validated tools]
+    T --> S[Public aviation sources]
+    T --> K[Deterministic KPI functions]
+    S --> K
+    K --> A
+    A --> R[Decision-focused answer]
+```
+
+The implementation uses one agent. Pydantic validates tool inputs, source
+adapters retrieve and normalize data, and ordinary Python calculates every
+number and ranking. BTS results are cached for 24 hours to reduce latency and
+avoid repeated requests.
 
 ## Run
 
@@ -13,124 +36,192 @@ cp .env.example .env
 uv run --env-file .env python -m airport_agent.cli
 ```
 
-Set `OPENROUTER_API_KEY` in `.env`. The default model is
-`openai/gpt-5.6-terra`.
+Set `OPENROUTER_API_KEY` in `.env`. OpenSky flight history also requires
+`OPENSKY_CLIENT_ID` and `OPENSKY_CLIENT_SECRET`. The default model is
+`openai/gpt-5.6-terra`; LangSmith tracing is optional.
 
-The agent exposes these tools:
+Run the offline checks with `uv run python -m unittest discover`.
 
-- `get_airport_details`: identifiers, coordinates, and runways from Aviation Weather Center.
-- `get_aviation_weather`: latest METAR from Aviation Weather Center.
-- `get_airport_status`: current events from the FAA NAS Status feed.
-- `get_outbound_flights` and `get_inbound_flights`: observed OpenSky flights for an explicit UTC date range.
-- `get_airport_traffic`: cached monthly outbound BTS T-100 commercial passenger, seat, departure, and load-factor totals.
-- `get_airport_performance`: cached historical BTS domestic arrival delays, cancellations, and delay causes.
-- `compare_airport_performance`: ranks domestic arrival disruption by delay rate, with cancellations as the tiebreaker.
-- `compare_airport_opportunity`: compares two airports through visible growth, supply-pressure, and operational-pressure votes.
-- `get_airport_demand_pressure`: passenger growth relative to seat growth, with occupancy and domestic delays as supporting evidence.
-- `compare_airport_growth`: comparable outbound passenger growth and occupancy rankings, with underlying totals and coverage exclusions.
-- `calculate_percentage`: deterministic percentage calculation.
+## Chosen data sources
 
-FAA, Aviation Weather Center, and BTS calls use `httpx`; OpenSky calls use its
-official Python SDK. OpenSky flight history requires an OAuth2 client. Add both
-values to `.env`:
+The prototype uses free public sources that can be queried at runtime without a
+pre-built aviation warehouse.
 
-```text
-OPENSKY_CLIENT_ID=
-OPENSKY_CLIENT_SECRET=
-```
+| Source | Used for | Why it was chosen | Main boundary |
+| --- | --- | --- | --- |
+| BTS T-100 airport summary | Monthly outbound passengers, seats, and departures | Official US traffic data with enough history for year-over-year comparisons | Aggregated service classes; no route detail or complete inbound totals |
+| BTS Airline On-Time report | Arrival delays, cancellations, and reported causes | Official historical operating-performance data | Domestic arrivals from reporting carriers; HTML report rather than a JSON API |
+| OpenSky | Observed arrivals, departures, and route inference | Free flight-level observations suitable for a prototype long-haul calculation | ADS-B coverage is incomplete and is not a schedule or passenger count |
+| Aviation Weather Center | Airport identity, coordinates, runways, and current weather | Public, structured, and aviation-specific | Runway facts do not describe usable hourly capacity |
+| FAA NAS Status | Current delays, closures, and traffic-management events | Authoritative live operating context | Current events cannot explain historical performance |
 
-OpenSky records are ADS-B observations, so counts can be incomplete and are not
-scheduled-flight or passenger totals. Long haul is fixed at a route distance
-over 3,000 statute miles. Flights with an unresolved airport remain visible as
-unknown and are excluded from the long-haul subset.
+The sources are kept separate when their coverage differs. In particular, T-100
+commercial traffic totals are not combined into a flight denominator with BTS
+domestic arrival performance.
 
-T-100 traffic comes from the public [BTS airport summary API](https://data.bts.gov/resource/r495-tyji.json),
-filtered to one airport and the requested months. No bulk downloads or API key
-are needed. JSON responses are cached for 24 hours in `.cache/t100.sqlite3`
-(excluded from Git); old ZIP cache entries are no longer used.
+## Scoring methodology
 
-The summary covers domestic and outbound international traffic across all reported
-commercial service classes, including nonscheduled services and cargo departures.
-It does not support a scheduled-passenger-only filter, routes, cancellation
-counts, or complete inbound totals. Long-haul analysis continues to use OpenSky.
+The methodology keeps each signal visible. There is no opaque weighted score.
+Every comparison uses an explicit period of no more than 12 months and, for
+growth, the same months one year earlier.
 
-## Historical arrival performance
+### Growth screen
 
-Try: "What were SFO's arrival delay rate, cancellation rate, and main delay
-causes in January 2025?"
+This screen ranks two or more airports by outbound passenger growth. Current
+seat occupancy breaks a tie. It also reports absolute passenger change and both
+periods' totals so that a high percentage from a small base is easy to spot.
 
-`get_airport_performance` accepts `airport`, `start_month`, and `end_month`
-(`YYYY-MM`, inclusive, up to 12 months). It fetches the filtered public
-[BTS arrival report](https://www.transtats.bts.gov/OT_Delay/OT_DelayCause1.asp)
-with `httpx`, parses the HTML in Python, and returns structured JSON to the
-agent. This source is an HTML report, not a JSON API. No credentials or bulk
-downloads are needed; validated results share the 24-hour SQLite cache.
+- Passenger growth = `(current passengers / prior passengers - 1) × 100`
+- Seat growth = `(current seats / prior seats - 1) × 100`
+- Growth gap = `passenger growth - seat growth`, in percentage points
+- Seat occupancy = `current passengers / current seats × 100`
 
-The response includes counts, delay and cancellation rates, average delay among
-arrivals delayed 15+ minutes, and delay minutes by reported cause. Operation
-percentages use all reported operations, including cancellations and diversions.
-Cause counts are rounded and prorated, so delayed arrivals are calculated as
-total minus on-time, cancelled, and diverted operations instead of summing causes.
+An airport is excluded when the comparison period is incomplete or a required
+baseline is zero. Ranking uses unrounded values, and exact ties share a rank.
 
-Coverage is domestic arrivals from reporting carriers, separate from T-100's
-commercial traffic population. Period totals do not establish complete reporting
-for every month. This report does not supply taxi times or physical capacity;
-NAS delay alone is not evidence of a runway bottleneck. Unavailable periods or
-unrecognized reports return an error rather than zero delays.
+### Congestion screen
 
-## Tracing
+This screen ranks airports by the share of reported domestic arrivals delayed
+at least 15 minutes. Cancellation rate breaks a tie. Both rates use all reported
+operations, including cancellations and diversions, as the denominator.
 
-Set `LANGSMITH_API_KEY` in `.env`. With `LANGSMITH_TRACING=true`, LangChain
-automatically sends agent runs, model calls, tool inputs/outputs, errors, and
-timings to the `airport-investment-agent` project in LangSmith. The development
-terminal also prints tool inputs and results; the final answer presents business
-findings without tool names or internal workflow. Restart after changing `.env`;
-the VS Code launch configuration also loads this file.
+The result measures operational disruption. It does not measure runway, gate,
+terminal, or peak-hour utilization, so the agent describes the first airport as
+more disrupted rather than physically constrained.
 
-The default endpoint is `https://api.smith.langchain.com`. For an EU workspace,
-use `https://eu.api.smith.langchain.com`. Set `LANGSMITH_TRACING=false` to disable
-tracing. Traces include conversation and tool data.
+### Demand-pressure proxy
 
-## Growth opportunity screen
+Unmet demand is latent travel and cannot be counted from completed flights. The
+agent therefore uses a narrower demand-pressure signal. It is positive only when:
 
-Try: "Compare SFO, LAX, and SNA for January–December 2025 against the same
-months in 2024 using the growth opportunity screen. Explain the ranking and
-limitations."
+1. passenger growth is positive; and
+2. passenger growth exceeds seat growth.
 
-The tool accepts `airports`, `start_month`, and `end_month` (up to 12 months).
-It compares outbound commercial traffic with the same months one year
-earlier, ranking passenger growth first and current seat occupancy second.
-Exact ties share a rank. There is no weighted investment score.
+Seat occupancy and domestic arrival disruption are shown as separate supporting
+evidence. They are not multiplied together because T-100 traffic and BTS arrival
+performance cover different flight populations. The output is explicitly called
+a proxy and never presented as a count of passengers who could not travel.
 
-- Passenger growth: `(current passengers / prior passengers - 1) * 100`.
-- Seat growth: `(current available seats / prior available seats - 1) * 100`.
-- Growth gap: passenger growth minus seat growth, in percentage points.
-- Seat occupancy: `current passengers / current available seats * 100`.
+### Two-airport modernization screen
 
-Results include absolute passenger change, both periods' totals, service coverage,
-sources, and excluded airports with reasons. Missing months and zero
-baselines are excluded from ranking. Presence of monthly rows does not establish
-complete reporting. This is an initial traffic growth screen: it does not measure
-latent demand, establish infrastructure constraints, or prove profitability.
+For a direct comparison, each airport can win one vote in each of three visible
+dimensions:
 
-Offline checks: `uv run python -m unittest discover`.
+| Dimension | Deterministic rule |
+| --- | --- |
+| Growth momentum | Higher outbound passenger growth |
+| Airline supply pressure | Positive growth and a positive growth gap are required; the higher gap wins, with occupancy as the tiebreaker |
+| Operational pressure | Higher domestic arrival delay rate, with cancellation rate as the tiebreaker |
 
-## Evaluation suite
+An airport needs at least two votes to lead. Equal dimensions cast no vote, and
+the result can be `mixed evidence`. A leader is the stronger candidate for
+further investigation under this screen, not a proven investment recommendation.
 
-The [evaluation suite](evals/README.md) contains 24 tool-grounded cases, including
-the four assignment questions, clarified variants, KPI screens, source-boundary
-tests, and a conversational follow-up. It generates fresh reference evidence from
-the deterministic tools and uses a separate OpenRouter call to judge the agent's
-answer and routing.
+### Long-haul share
 
-## Two-airport opportunity screen
+Long haul is defined as a route longer than 3,000 statute miles. The percentage
+is confirmed long-haul outbound OpenSky observations divided by all outbound
+observations for the same airport and UTC dates. Flights with unknown
+destinations stay in the denominator, making the result a conservative lower
+bound within an incomplete ADS-B sample.
 
-Try: "Compare SFO and SNA for modernization and growth opportunity from January
-through December 2025 versus the same months in 2024. Which ranks higher?"
+## Key tradeoffs
 
-The screen gives one vote each for outbound passenger growth, constrained airline
-seat supply, and domestic arrival disruption. An airport needs two votes to lead;
-tied dimensions cast no vote. Supply pressure requires both positive passenger
-growth and passenger growth above seat growth, so a merely less-negative gap does
-not win that dimension. The output keeps every component visible and does not
-claim to forecast returns or measure physical airport capacity.
+**Transparency over a richer composite.** Equal votes and visible components are
+easy to reproduce and explain. A weighted investment score or peer-group z-score
+could appear more sophisticated, but the available prototype data do not justify
+the weights or provide a complete peer universe.
+
+**Live public access over perfect coverage.** The project avoids paid APIs and
+bulk downloads. BTS T-100 provides monthly outbound commercial passengers,
+seats, and departures; BTS On-Time provides domestic arrival reliability;
+OpenSky provides observed routes; Aviation Weather Center and FAA provide airport
+facts, weather, and current operating context. These sources have different
+populations and cannot always be combined into one statistic.
+
+**Observed pressure over physical capacity.** Growth, seat supply, and delays are
+useful screening signals, but they do not establish a runway or terminal ceiling.
+A stronger feasibility study would require peak-hour throughput, gates, runway
+configuration, slot or curfew constraints, planned projects, capital cost, and
+revenue evidence.
+
+**Simple caching over a data platform.** A local SQLite cache improves speed and
+resilience for a one-day prototype. It does not provide a historical warehouse,
+shared cache, or formal data-versioning layer.
+
+**A single agent over multi-agent orchestration.** The task mainly requires tool
+selection and explanation. One tool-calling loop is easier to trace, test, and
+debug, while deterministic functions carry the decision logic.
+
+## Assumptions
+
+- The scope is US airports identified by IATA code.
+- An omitted comparison period defaults to the most recently completed calendar
+  year versus the preceding year, and the answer discloses that choice.
+- Passenger growth represents growth in served demand. It is evidence of market
+  momentum, not a measurement of people who wanted to fly but could not.
+- Available seats represent airline supply. They are not airport terminal, gate,
+  or runway capacity.
+- Domestic arrival delay rate is an operational-pressure proxy for congestion.
+  It does not prove that airport infrastructure caused the delay.
+- Long haul means a route distance greater than 3,000 statute miles. Unknown
+  OpenSky destinations remain in the denominator, so the percentage is a lower
+  bound within the observed sample.
+- Reported source data are treated as comparable across the selected periods
+  after required months and positive baselines are validated. A reported month
+  does not guarantee that every carrier submission is complete.
+
+## Constraints
+
+This is a time-boxed home-assignment prototype built without paid data. Public
+source coverage limits the conclusions: historical delay data exclude
+international arrivals, OpenSky observations can be incomplete, and current FAA
+or weather data cannot establish causes for past trends. The available sources
+also lack gates, usable peak-hour throughput, slot and curfew constraints,
+terminal crowding, project costs, and airport revenue forecasts.
+
+The terminal interface, local SQLite cache, and single-process agent are suitable
+for demonstration and evaluation. They are not designed for concurrent users,
+long-term data retention, or production availability.
+
+## Where and how AI is used
+
+The LLM is the conversational coordinator. It:
+
+- interprets the user's question and selects the relevant tool;
+- applies disclosed defaults or asks one clarification when airport identity,
+  airport set, metric, or period cannot be resolved safely;
+- handles follow-up questions using conversation history; and
+- turns structured evidence into a concise, decision-focused explanation with
+  the period, source, assumptions, and material caveats.
+
+The LLM does not calculate KPIs, invent missing values, or decide ranking rules.
+Those responsibilities stay in typed Python functions. The system prompt requires
+a tool call before any data-derived number and prevents internal tool workflow or
+reasoning from appearing in the final answer.
+
+This separation makes numeric results reproducible while retaining the useful
+part of AI: understanding varied questions and explaining evidence in context.
+LangSmith tracing records model calls and tool inputs and outputs during
+development, and a tool-grounded evaluation suite checks both routing and answer
+quality.
+
+## Future improvements
+
+The next improvement would be a physical-capacity layer: peak-hour operations,
+gate utilization, runway configuration, slot or curfew rules, and planned capital
+projects. This would test whether observed pressure is plausibly relieved by
+modernization rather than merely correlated with it.
+
+After that, the screen could add:
+
+1. a complete airport peer universe and hub-class normalization;
+2. a reliable route or schedule source for representative long-haul shares;
+3. catchment demographics, competing airports, and surface-access indicators;
+4. project cost, airline commitment, aeronautical revenue, and commercial revenue
+   inputs for a financial screen; and
+5. persistent versioned data, source monitoring, and broader human-reviewed
+   evaluations for production use.
+
+Until then, the agent should be used to shortlist airports and frame deeper
+diligence, not to make a final investment decision.
