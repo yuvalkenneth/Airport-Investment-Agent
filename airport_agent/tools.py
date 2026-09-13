@@ -4,7 +4,7 @@ from math import isfinite
 
 from langchain.tools import ToolException, tool
 
-from airport_agent.aviation import AirportQuery, AviationDataError, FlightQuery, airport_details, airport_status, get_flights, latest_weather, route_distance_miles
+from airport_agent.aviation import AirportQuery, AviationDataError, FlightQuery, airport_details, airport_status, get_flights, latest_weather
 from airport_agent.bts import TrafficQuery, airport_traffic
 from airport_agent.kpis import ComparisonQuery, OpportunityQuery, compare_growth, compare_opportunity, compare_performance, demand_pressure
 from airport_agent.performance import PerformanceQuery, airport_performance
@@ -81,13 +81,6 @@ def get_airport_performance(**kwargs) -> dict:
         raise ToolException(str(exc)) from exc
 
 
-@tool
-def calculate_route_distance(origin_lat: float, origin_lon: float, destination_lat: float, destination_lon: float) -> dict:
-    """Calculate great-circle distance in statute miles between two coordinates."""
-    distance = route_distance_miles({"lat": origin_lat, "lon": origin_lon}, {"lat": destination_lat, "lon": destination_lon})
-    return {"distance_miles": distance, "long_haul": distance > 3_000}
-
-
 @tool(args_schema=ComparisonQuery)
 def compare_airport_growth(**kwargs) -> dict:
     """Return the complete named growth screen for 2-10 US airports: outbound passenger growth versus the same months last year, then occupancy, with seats, totals, and exclusions. Do not add performance or demand-pressure data unless the user explicitly asks for those dimensions."""
@@ -128,4 +121,4 @@ for api_tool in (get_airport_details, get_aviation_weather, get_airport_status, 
     api_tool.handle_tool_error = True
 calculate_percentage.handle_tool_error = True
 
-TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, get_airport_performance, compare_airport_performance, compare_airport_opportunity, get_airport_demand_pressure, compare_airport_growth, calculate_route_distance, calculate_percentage]
+TOOLS = [get_airport_details, get_aviation_weather, get_airport_status, get_outbound_flights, get_inbound_flights, get_airport_traffic, get_airport_performance, compare_airport_performance, compare_airport_opportunity, get_airport_demand_pressure, compare_airport_growth, calculate_percentage]

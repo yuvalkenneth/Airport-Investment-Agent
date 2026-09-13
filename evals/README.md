@@ -1,6 +1,6 @@
 # Evaluation suite
 
-The suite contains 25 questions from direct lookups through rankings, proxy
+The suite contains 24 questions from direct lookups through rankings, proxy
 reasoning, source-boundary checks, ambiguous assignment prompts, and a
 conversational follow-up. Each case defines:
 
@@ -45,4 +45,3 @@ The agent and judge default to `openai/gpt-5.6-terra`. Set
 `EVAL_JUDGE_MODEL` to use a different OpenRouter judge. Full runs make live API
 requests and at least two model calls per case, so targeted runs are faster while
 iterating. JSON reports are written to `evals/results/` and excluded from Git.
-

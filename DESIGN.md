@@ -118,7 +118,7 @@ successful offline tests do not establish current source access or LLM behavior.
 
 ### Prototype verification, September 10, 2026
 
-All 20 offline checks passed. The [saved live examples](samples/assessment_smoke.json)
+All 18 offline checks passed. The [saved live examples](samples/assessment_smoke.json)
 include tool arguments, source results, and the raw final answers for the four
 questions, plus SFO clarification and its follow-up. All four data flows returned
 evidence using the configured `deepseek/deepseek-v4-flash-0731` model.

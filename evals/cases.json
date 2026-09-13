@@ -85,19 +85,6 @@
     "reference_answer": "Divide confirmed long-haul matching flights by all observed outbound flights for the identical date range using the calculation tool. Include unknown destinations in the denominator and call the result a lower bound within incomplete OpenSky observations."
   },
   {
-    "id": "jfk-lax-long-haul-definition",
-    "difficulty": 2,
-    "category": "deterministic_calculation",
-    "question": "Under the defined 3,000-statute-mile rule, does a nonstop route between JFK and LAX count as long-haul?",
-    "expected_tools": ["get_airport_details", "get_airport_details", "calculate_route_distance"],
-    "reference_calls": [
-      {"tool": "get_airport_details", "args": {"airport": "JFK"}},
-      {"tool": "get_airport_details", "args": {"airport": "LAX"}}
-    ],
-    "reference_derivation": "route_distance",
-    "reference_answer": "Use the airports' coordinates and deterministic great-circle distance. Because the result is below the strict greater-than-3,000-mile threshold, classify JFK-LAX as not long-haul under this project definition."
-  },
-  {
     "id": "sfo-demand-pressure",
     "difficulty": 3,
     "category": "assignment_clarified",

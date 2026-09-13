@@ -28,7 +28,7 @@ The agent exposes these tools:
 - `compare_airport_opportunity`: compares two airports through visible growth, supply-pressure, and operational-pressure votes.
 - `get_airport_demand_pressure`: passenger growth relative to seat growth, with occupancy and domestic delays as supporting evidence.
 - `compare_airport_growth`: comparable outbound passenger growth and occupancy rankings, with underlying totals and coverage exclusions.
-- `calculate_route_distance` and `calculate_percentage`: deterministic calculations.
+- `calculate_percentage`: deterministic percentage calculation.
 
 FAA, Aviation Weather Center, and BTS calls use `httpx`; OpenSky calls use its
 official Python SDK. OpenSky flight history requires an OAuth2 client. Add both
@@ -43,15 +43,6 @@ OpenSky records are ADS-B observations, so counts can be incomplete and are not
 scheduled-flight or passenger totals. Long haul is fixed at a route distance
 over 3,000 statute miles. Flights with an unresolved airport remain visible as
 unknown and are excluded from the long-haul subset.
-
-Inspect small live responses without invoking the model:
-
-```sh
-uv run --env-file .env python scripts/inspect_apis.py
-```
-
-The inspector writes JSON evidence under `samples/`. It never records OpenSky
-credentials or access tokens.
 
 T-100 traffic comes from the public [BTS airport summary API](https://data.bts.gov/resource/r495-tyji.json),
 filtered to one airport and the requested months. No bulk downloads or API key
@@ -126,7 +117,7 @@ Offline checks: `uv run python -m unittest discover`.
 
 ## Evaluation suite
 
-The [evaluation suite](evals/README.md) contains 25 tool-grounded cases, including
+The [evaluation suite](evals/README.md) contains 24 tool-grounded cases, including
 the four assignment questions, clarified variants, KPI screens, source-boundary
 tests, and a conversational follow-up. It generates fresh reference evidence from
 the deterministic tools and uses a separate OpenRouter call to judge the agent's

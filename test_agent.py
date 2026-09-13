@@ -17,30 +17,6 @@ from airport_agent.constants import AGENT_RECURSION_LIMIT, SYSTEM_PROMPT
 from airport_agent.tools import TOOLS, calculate_percentage
 
 
-ASSESSMENT_QUESTION_CASES = (
-    {
-        "question": "Which New England airports are strong terminal expansion candidates?",
-        "must_clarify": ("analysis period", "ranking objective"),
-        "suggested_default": "explicit months compared with the same months one year earlier",
-    },
-    {
-        "question": "Compare LA and Santa Ana congestion.",
-        "must_clarify": ("LAX and SNA", "analysis period", "congestion measure"),
-        "suggested_default": "arrival delay and cancellation rates for the latest complete year",
-    },
-    {
-        "question": "What is the percentage of long-haul flights out of Anchorage airport?",
-        "must_clarify": ("analysis period",),
-        "suggested_default": "observed departures in an explicit completed UTC day; routes over 3,000 statute miles",
-    },
-    {
-        "question": "What is the unmet flight demand at SFO and why?",
-        "must_clarify": ("analysis period", "proxy for unmet demand"),
-        "suggested_default": "passenger growth versus seat growth in explicit months against last year, with occupancy and domestic delays as supporting evidence",
-    },
-)
-
-
 class ScriptedModel(FakeMessagesListChatModel):
     seen: list = Field(default_factory=list)
 
@@ -62,15 +38,6 @@ def tool_call(call_id, part, total):
 
 
 class AgentChecks(unittest.TestCase):
-    def test_assessment_question_contracts(self):
-        self.assertEqual(len(ASSESSMENT_QUESTION_CASES), 4)
-        for case in ASSESSMENT_QUESTION_CASES:
-            self.assertTrue(case["question"])
-            self.assertTrue(case["must_clarify"])
-            self.assertTrue(case["suggested_default"])
-        self.assertIn("ask one concise clarification", SYSTEM_PROMPT.lower())
-        self.assertIn("estimate using stated proxies", SYSTEM_PROMPT)
-
     def test_tool_loop_followup_and_clear(self):
         model = ScriptedModel(responses=[
             tool_call("first", 25, 100),

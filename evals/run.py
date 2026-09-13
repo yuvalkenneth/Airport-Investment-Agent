@@ -139,14 +139,6 @@ def _reference_evidence(case: dict, tools: dict) -> tuple[list[dict], list[str]]
         args = {"part": long_haul["matching_flights"], "total": all_flights["observed_flights"]}
         evidence.append({"tool": "calculate_percentage", "args": args,
                          "result": tools["calculate_percentage"].invoke(args)})
-    elif case.get("reference_derivation") == "route_distance":
-        origin, destination = (item["result"] for item in evidence[:2])
-        args = {
-            "origin_lat": origin["lat"], "origin_lon": origin["lon"],
-            "destination_lat": destination["lat"], "destination_lon": destination["lon"],
-        }
-        evidence.append({"tool": "calculate_route_distance", "args": args,
-                         "result": tools["calculate_route_distance"].invoke(args)})
     return evidence, errors
 
 
