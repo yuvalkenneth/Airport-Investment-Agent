@@ -37,8 +37,10 @@ Score four dimensions:
 - reasoning (0-2): conclusion follows the KPI and does not overstate proxies or causality;
 - communication (0-2): direct, clear, decision-relevant, with material assumptions and caveats.
 
-For clarification cases, a correct answer asks one concise clarification before
-collecting data. For source-boundary cases, reward a precise limitation rather
+For clarification cases, a correct answer proposes a defensible default for any
+missing period and asks one concise clarification only for material ambiguity that
+cannot be resolved safely, before collecting data. For source-boundary cases,
+reward a precise limitation rather
 than a fabricated answer. Optional tool names may be used but are not required;
 no call is correct when the answer only states a known source limitation and gives
 no data-derived number. Fresh reference evidence is unknown to the agent, so any
@@ -211,6 +213,7 @@ def main() -> int:
         route = _route_check(case["expected_tools"], actual_calls, case.get("optional_tools"))
         setup_route = _route_check(case.get("setup_expected_tools", []), setup_calls)
         payload = {
+            "evaluation_date_utc": datetime.now(UTC).date().isoformat(),
             "question": case["question"],
             "category": case["category"],
             "written_reference_answer": case["reference_answer"],

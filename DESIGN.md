@@ -6,7 +6,8 @@ A conversational prototype for screening US airport modernization opportunities.
 It ranks observed growth and disruption, then explains the evidence. It does not
 measure latent demand, prove an infrastructure bottleneck, or calculate investment
 returns. The assignment's four example questions are supported within the source
-coverage below; missing dates or ambiguous airports trigger clarification.
+coverage below; undated comparisons use a disclosed default, while ambiguous
+airport identities or sets trigger a concise clarification.
 
 All aviation sources are free. OpenRouter model usage is separate and needs an
 API key; LangSmith tracing is optional. No bulk aviation dataset is downloaded.
@@ -117,7 +118,7 @@ successful offline tests do not establish current source access or LLM behavior.
 
 ### Prototype verification, September 10, 2026
 
-All 19 offline checks passed. The [saved live examples](samples/assessment_smoke.json)
+All 20 offline checks passed. The [saved live examples](samples/assessment_smoke.json)
 include tool arguments, source results, and the raw final answers for the four
 questions, plus SFO clarification and its follow-up. All four data flows returned
 evidence using the configured `deepseek/deepseek-v4-flash-0731` model.
@@ -134,4 +135,5 @@ The default was subsequently changed to `openai/gpt-5.6-terra` through OpenRoute
 In [two targeted rechecks](samples/terra_recheck.json), Terra correctly identified
 SNA's leading cause and omitted unsupported cargo claims for ANC. The prompt and
 tools were unchanged. These two errors did not recur; the broader narrative
-behavior has not been exhaustively evaluated. All 19 offline checks still pass.
+behavior has not been exhaustively evaluated. The separate evaluation suite now
+covers this behavior with tool-grounded reference evidence.

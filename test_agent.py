@@ -68,7 +68,7 @@ class AgentChecks(unittest.TestCase):
             self.assertTrue(case["question"])
             self.assertTrue(case["must_clarify"])
             self.assertTrue(case["suggested_default"])
-        self.assertIn("ask one concise clarification", SYSTEM_PROMPT)
+        self.assertIn("ask one concise clarification", SYSTEM_PROMPT.lower())
         self.assertIn("estimate using stated proxies", SYSTEM_PROMPT)
 
     def test_tool_loop_followup_and_clear(self):

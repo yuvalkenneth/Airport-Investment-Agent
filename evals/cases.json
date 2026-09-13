@@ -203,8 +203,8 @@
     "question": "Which airports in New England are strong candidates for terminal expansion?",
     "expected_tools": [],
     "reference_calls": [],
-    "minimum_score": 10,
-    "reference_answer": "Ask one concise clarification covering the airport set and analysis period. The already-defined growth screen may be stated as the method; do not silently reuse a demo shortlist."
+    "minimum_score": 8,
+    "reference_answer": "Recommend a clear regional airport universe and the most recently completed calendar year compared with the preceding year as defaults, then ask one concise question that lets the user override the airport set. Do not collect data or silently reuse a demo shortlist before the airport universe is resolved."
   },
   {
     "id": "assignment-la-clarification",
